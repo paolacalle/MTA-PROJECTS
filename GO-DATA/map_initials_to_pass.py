@@ -1,3 +1,5 @@
+"""Build JSON lookup files for users, initials, and PASS numbers."""
+
 import pandas as pd
 import sys
 import json
@@ -15,6 +17,7 @@ OUTPUT_MERGEDNAME = r'..\mappers\MASTERGO\MAPPED\merged_users.json'
 
 
 def excel_to_json(input_path, output_path, key_name_col, value_col):
+    """Convert two Excel columns into a JSON key-value mapping."""
     df = pd.read_excel(input_path)
 
     result = {}
@@ -46,6 +49,7 @@ def excel_to_json(input_path, output_path, key_name_col, value_col):
 
 
 def merge_by_name(ls_dicts):
+    """Merge multiple name-keyed dictionaries into one combined JSON file."""
     merged = {}
 
     for d, label in ls_dicts:
@@ -63,6 +67,7 @@ def merge_by_name(ls_dicts):
 
 
 def preprocess():
+    """Generate the default mapping files used by the MASTERGO pipeline."""
     user_to_pass = excel_to_json(
         INPUT_ACTIVE,
         OUTPUT_ACTIVE,
@@ -90,6 +95,7 @@ def preprocess():
 
 
 def main():
+    """Run the CLI helper for converting an Excel column pair to JSON."""
     if len(sys.argv) < 4:
         print("Usage: python script.py <input_excel_path> <key_column> <value_column> [output_json_path]")
         sys.exit(1)

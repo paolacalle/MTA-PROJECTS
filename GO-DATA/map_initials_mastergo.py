@@ -1,3 +1,5 @@
+"""Map MASTERGO initials columns to employee names and PASS numbers."""
+
 import json
 import re
 
@@ -16,11 +18,13 @@ PASS_COLS = ["Written By (PASS #)", "Verified by (PASS #)"]
 # ----------------------------
 
 def load_json(path):
+    """Load a UTF-8 JSON file from disk."""
     with open(path, "r", encoding="utf-8") as f:
         return json.load(f)
 
 
 def normalize_initials(val):
+    """Normalize initials for dictionary lookups."""
     if not val:
         return ""
     val = str(val).lower().strip()
@@ -31,6 +35,7 @@ def normalize_initials(val):
 
 
 def safe_str(val):
+    """Return a trimmed string or an empty string for missing-like values."""
     if val is None:
         return ""
     val = str(val).strip()
@@ -40,10 +45,12 @@ def safe_str(val):
 
 
 def normalize_name(name):
+    """Normalize a name value for case-insensitive lookups."""
     return safe_str(name).lower().strip()
 
 
 def resolve_name(initials, initials_map):
+    """Resolve initials to the first non-empty matching employee name."""
     key = normalize_initials(initials)
     value = initials_map.get(key)
 
@@ -62,6 +69,7 @@ def resolve_name(initials, initials_map):
 
 
 def resolve_pass(name, name_map):
+    """Resolve a normalized employee name to a PASS number."""
     if not name:
         return None
     return name_map.get(normalize_name(name))
@@ -72,10 +80,12 @@ def resolve_pass(name, name_map):
 # ----------------------------
 
 def normalize_header(h):
+    """Normalize a worksheet header for case-insensitive matching."""
     return str(h).strip().lower() if h else ""
 
 
 def rebuild_headers(ws):
+    """Rebuild the worksheet header index after columns are added."""
     headers = {}
     for idx, cell in enumerate(ws[1]):
         key = normalize_header(cell.value)
@@ -85,6 +95,7 @@ def rebuild_headers(ws):
 
 
 def ensure_column(ws, headers, column_name):
+    """Ensure a single output column exists and return its index."""
     key = normalize_header(column_name)
 
     if key in headers:
@@ -102,6 +113,7 @@ def ensure_column(ws, headers, column_name):
 # ----------------------------
 
 def process(ws):
+    """Populate name and PASS columns based on writer/verifier initials."""
     initials_map = load_json(INPUT_INITIALSTONAME)
     name_map = load_json(INPUT_NAMETOPASS)
 

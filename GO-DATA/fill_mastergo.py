@@ -1,4 +1,7 @@
+"""Fill missing MASTERGO fields and normalize selected text columns."""
+
 def get_headers(ws):
+    """Return a lowercase header-to-column-index mapping for the worksheet."""
     return {
         str(cell.value).strip().lower(): idx + 1
         for idx, cell in enumerate(ws[1])
@@ -6,6 +9,7 @@ def get_headers(ws):
     }
 
 def ensure_cols(ws, headers, cols):
+    """Ensure the required columns exist and return their indexes."""
     col_map = {}
     for col in cols:
         key = col.lower()
@@ -20,6 +24,7 @@ def ensure_cols(ws, headers, cols):
 
 
 def fill_TRONAME(ws, row, col_map):
+    """Populate an empty TRO name with the current default placeholder."""
     col = col_map["TRO Name (REQUIRED)"]
     fill_value = ""
     cell = ws.cell(row=row, column=col)
@@ -29,6 +34,7 @@ def fill_TRONAME(ws, row, col_map):
 
 
 def fill_days_empty(ws, row, col_map):
+    """Fill missing schedule-day values with the default full-week label."""
     col = col_map["Days (REQUIRED)"]
     fill_value = "SUN - SUN"
     cell = ws.cell(row=row, column=col)
@@ -38,6 +44,7 @@ def fill_days_empty(ws, row, col_map):
 
 
 def fill_record_created_on(ws, row, col_map):
+    """Copy the scheduled time into record-created-on when that field is empty."""
     col_to_fill = col_map["Record Created On (REQUIRED)"]
     col_to_copy = col_map["Scheduled Time (REQUIRED)"]
 
@@ -49,6 +56,7 @@ def fill_record_created_on(ws, row, col_map):
 
 
 def fill_duration_printed_as(ws, row, col_map):
+    """Fill a missing duration display label with the default text."""
     col = col_map["Duration Printed As (REQUIRED)"]
     fill_value = "No Text"
     cell = ws.cell(row=row, column=col)
@@ -58,6 +66,7 @@ def fill_duration_printed_as(ws, row, col_map):
 
 
 def clean_line_access_database(ws, row, col_map):
+    """Rebuild the combined line field from the individual line columns."""
     target_col = col_map["LINE (ACCESS DATABASE)"]
 
     line_cols = [
@@ -77,6 +86,7 @@ def clean_line_access_database(ws, row, col_map):
     ws.cell(row=row, column=target_col).value = new_line
 
 def fill_division(ws, row, col_map):
+    """Derive the division code from the first three characters of Desk."""
     target_col = col_map["Division (REQUIRED)"]
     fill_col = col_map["Desk (REQUIRED)"]
 
@@ -89,6 +99,7 @@ def fill_division(ws, row, col_map):
         ws.cell(row=row, column=target_col).value = division
 
 def clean_text(ws, row, target_col):
+    """Collapse multiline text into a single normalized line with clean spacing."""
     cell = ws.cell(row=row, column=target_col)
     val = cell.value
 
@@ -112,6 +123,7 @@ def clean_text(ws, row, target_col):
     cell.value = final_value
 
 def process(ws):
+    """Apply all fill and cleanup rules across the worksheet."""
     headers = get_headers(ws)
 
     required_cols = [

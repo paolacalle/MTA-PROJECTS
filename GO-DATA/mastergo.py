@@ -1,3 +1,10 @@
+"""Run the MASTERGO workbook enrichment pipeline.
+
+This script loads the current MASTERGO workbook, applies the initials,
+line-mapping, and fill/cleanup transformations, then saves a new enriched
+version of the file.
+"""
+
 from openpyxl import load_workbook
 import re
 import map_initials_mastergo as mapinitials
@@ -11,6 +18,7 @@ WB = load_workbook(INPUT_MASTERGO)
 WS = WB.active
 
 def main():
+    """Execute the end-to-end MASTERGO enrichment workflow."""
 
     mapinitials.process(ws=WS)
     maplines.process(ws=WS)

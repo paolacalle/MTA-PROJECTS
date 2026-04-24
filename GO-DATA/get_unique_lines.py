@@ -1,3 +1,5 @@
+"""Collect unique line values from the raw line workbooks into one file."""
+
 import pandas as pd
 from collections import defaultdict
 import os
@@ -15,6 +17,7 @@ OUTPUT_LINESUNIQUE = "..\\mappers\\lines.xlsx"
 
 
 def clean_value(val):
+    """Normalize a raw line value and discard blank-like entries."""
     if pd.isna(val):
         return None
 
@@ -27,6 +30,7 @@ def clean_value(val):
 
 
 def process_lines():
+    """Aggregate unique line values and record which source files contain them."""
     all_values = defaultdict(set)
 
     for file in INPUT_FILES:

@@ -1,3 +1,5 @@
+"""Build a GO-number lookup JSON from the enriched MASTERGO workbook."""
+
 import pandas as pd
 import json
 
@@ -6,6 +8,7 @@ INPUT_MASTERGO = r'..\clean\MASTERGO\MASTERGO_ENRICHED_V6.xlsx'
 
 
 def build_go_mapping():
+    """Create a GO-number-to-metadata mapping from required workbook columns."""
     df = pd.read_excel(INPUT_MASTERGO)
 
     required_cols = [
@@ -44,12 +47,14 @@ def build_go_mapping():
 
 
 def clean_val(val):
+    """Normalize cell values for JSON output."""
     if pd.isna(val):
         return ""
     return str(val).strip()
 
 
 def main():
+    """Write the GO-number mapping file to disk."""
     mapping = build_go_mapping()
 
     with open(OUTPUT_GONUMBERSTODATA, "w", encoding="utf-8") as f:

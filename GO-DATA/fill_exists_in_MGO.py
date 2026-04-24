@@ -1,3 +1,5 @@
+"""Mark worksheet rows whose GO number exists in the MASTERGO mapping."""
+
 import json
 
 INPUT_GONUMBERSTODATA = r'..\mappers\MASTERGO\MAPPED\gonumber_to_data.json'
@@ -7,6 +9,7 @@ with open(INPUT_GONUMBERSTODATA, "r", encoding="utf-8") as f:
 
 
 def get_headers(ws):
+    """Return a lowercase header-to-column-index mapping for the worksheet."""
     return {
         str(cell.value).strip().lower(): idx + 1
         for idx, cell in enumerate(ws[1])
@@ -15,6 +18,7 @@ def get_headers(ws):
 
 
 def ensure_cols(ws, headers, cols):
+    """Ensure the target and GO-number columns exist before processing."""
     col_map = {}
     for col in cols:
         key = col.lower()
@@ -29,6 +33,7 @@ def ensure_cols(ws, headers, cols):
 
 
 def fill_column(ws, row, target_col, go_num_col):
+    """Write `1` when the GO number exists in MASTERGO, otherwise `0`."""
     go_val = ws.cell(row=row, column=go_num_col).value
 
     # normalize GO number
@@ -47,6 +52,7 @@ def fill_column(ws, row, target_col, go_num_col):
 
 
 def process(ws, target_col, go_num_col):
+    """Populate an existence flag column for all worksheet rows."""
     headers = get_headers(ws)
 
     required_cols = [target_col, go_num_col]

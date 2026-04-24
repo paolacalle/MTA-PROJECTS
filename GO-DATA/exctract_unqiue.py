@@ -1,3 +1,5 @@
+"""Export one workbook per column containing that column's unique values."""
+
 import pandas as pd
 import sys
 import os
@@ -5,6 +7,7 @@ import os
 import re
 
 def make_safe_filename(name, max_len=50):
+    """Convert a column name into a filesystem-safe filename."""
     # Replace invalid characters with underscore
     name = re.sub(r'[\\/*?:"<>|#()]', '_', str(name))
     
@@ -15,6 +18,7 @@ def make_safe_filename(name, max_len=50):
     return name[:max_len].strip('_')
 
 def extract_unique_per_column(input_path, output_dir):
+    """Write each column's unique non-null values to a separate Excel file."""
     df = pd.read_excel(input_path)
 
     # Create output directory if it doesn't exist
@@ -35,6 +39,7 @@ def extract_unique_per_column(input_path, output_dir):
             print(f"Failed for column '{col}': {e}")
 
 def main():
+    """Run the CLI wrapper for exporting unique values per column."""
     if len(sys.argv) < 2:
         print("Usage: python script.py <input_excel_path> [output_directory]")
         sys.exit(1)

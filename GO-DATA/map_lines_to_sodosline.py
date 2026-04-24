@@ -1,3 +1,5 @@
+"""Build the line-to-standardized-line mapping used by MASTERGO enrichment."""
+
 import json
 from openpyxl import load_workbook
 
@@ -10,6 +12,7 @@ OUTPUT_LINESTOSODOS = r'..\mappers\MASTERGO\MAPPED\lines_to_sodos_lines.json'
 # ----------------------------
 
 def safe_str(v):
+    """Return a normalized lowercase string or an empty string."""
     if v is None:
         return ""
     v = str(v).strip()
@@ -19,6 +22,7 @@ def safe_str(v):
 
 
 def build_mapping(ws):
+    """Read the mapping workbook and build the line mapping dictionary."""
     headers = {}
     for idx, cell in enumerate(ws[1]):
         headers[safe_str(cell.value).lower()] = idx + 1
@@ -71,6 +75,7 @@ def build_mapping(ws):
 # ----------------------------
 
 def process():
+    """Generate the JSON mapping file consumed by line-expansion scripts."""
     wb = load_workbook(INPUT_LINES)
     ws = wb.active
 

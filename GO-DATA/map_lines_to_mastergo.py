@@ -1,3 +1,5 @@
+"""Expand combined MASTERGO line values into standardized line columns."""
+
 import json
 import re
 import pandas as pd
@@ -23,6 +25,7 @@ LINE_COLS = [
 # ----------------------------
 
 def safe_str(v):
+    """Return a normalized lowercase string or an empty string."""
     if v is None:
         return ""
     v = str(v).strip().lower()
@@ -32,17 +35,20 @@ def safe_str(v):
 
 
 def normalize_key(v):
+    """Normalize a mapping key before lookup."""
     v = safe_str(v)
     # v = re.sub(r"\s+", " ", v)
     return v
 
 
 def load_json(path):
+    """Load a UTF-8 JSON mapping file from disk."""
     with open(path, "r", encoding="utf-8") as f:
         return json.load(f)
 
 
 def get_headers(ws):
+    """Return a lowercase header-to-column-index mapping."""
     return {
         str(cell.value).strip().lower(): idx + 1
         for idx, cell in enumerate(ws[1])
@@ -51,6 +57,7 @@ def get_headers(ws):
 
 
 def ensure_cols(ws, headers, cols):
+    """Ensure the output line columns exist and return their indexes."""
     col_map = {}
     for col in cols:
         key = col.lower()
@@ -69,9 +76,7 @@ def ensure_cols(ws, headers, cols):
 # ----------------------------
 
 def expand_maps(value, mapping, map1_unique):
-    """
-    returns flattened list of mapped values
-    """
+    """Return the flattened mapped line list for a single input token."""
     value = normalize_key(value)
 
     if not value:
@@ -92,6 +97,7 @@ def expand_maps(value, mapping, map1_unique):
 
 
 def split_input(cell_value):
+    """Split a slash-delimited line field into normalized parts."""
     if not cell_value:
         return []
     return [normalize_key(x) for x in str(cell_value).split("/") if x.strip()]
@@ -102,6 +108,7 @@ def split_input(cell_value):
 # ----------------------------
 
 def process(ws):
+    """Map the combined line field into `Line 1` through `Line 6`."""
     mapping = load_json(INPUT_MERGEDNAME)
     map1_unique = [normalize_key(v) for v in pd.read_csv(INPUT_MAP1)["map1"].to_list()]
 

@@ -1,3 +1,5 @@
+"""Enrich the equipment log with a flag showing whether a GO exists in MASTERGO."""
+
 from openpyxl import load_workbook
 import re
 import fill_exists_in_MGO as inMGO 
@@ -9,6 +11,7 @@ WB = load_workbook(INPUT_EQUIPMENTLOG)
 WS = WB.active
 
 def main():
+    """Populate the existence flag and save the enriched equipment workbook."""
 
     inMGO.process(ws=WS, target_col="Exists in MGO", go_num_col="GO # (REQUIRED)")
 
