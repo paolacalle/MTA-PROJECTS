@@ -1,61 +1,123 @@
 # MTA Passenger Station Power Limits Pipeline
 
-This project extracts and transforms MTA passenger station power limit data from unstructured .txt files into a clean, structured CSV dataset for analysis.
+This repository converts semi-structured MTA passenger station power limit text files into CSV outputs that are usable for analysis and downstream reporting.
 
+## Overview
 
-# Impact
+This pipeline is split into three stages so the raw text parsing stays separate from the later grouping logic:
 
-1. Automated extraction from 1,000+ unstructured text files, significantly reducing manual processing time and human error
-2. Standardized inconsistent data into a structured format, improving data reliability
-3. Enabled downstream use in a power monitoring dashboard, supporting the power control team with faster and more informed decision-making
+1. `parse_into_csv.py` extracts raw station records from text files into a normalized intermediate CSV format.
+2. `group_zone.py` resolves zone-level metadata such as print codes and line names, then expands the intermediate data into station-level grouped output.
+3. `per_track.py` reuses the same zone resolution logic and produces the final per-track dataset with substation and CBH context attached.
 
-## Problem
+The source files are not consistently formatted, so the scripts deliberately preserve a number of case-specific rules instead of trying to aggressively normalize everything upfront.
 
-Raw data is:
+## What The Scripts Do
 
-- Semi-structured and inconsistent
-- Mixed between station-level and track-level info
-- Not usable for analytics or dashboards
+`parse_into_csv.py`
 
+- Walks the raw division folders (`BMT`, `IRT`, `IND`)
+- Parses case-specific records from `.txt` files
+- Extracts rows into `data_extracted/intial_processed/<DIVISION>.csv`
+- Logs unmatched lines to `data_extracted/intial_processed/unable_to_process.csv`
+- Logs non-text files to `data_extracted/intial_processed/unprocessed_files.csv`
 
-## Solution
+Recognized cases in the raw text:
 
-Built a Python pipeline that:
+- `zone` and the OCR edge case `z0ne`
+- `track ...`
+- `tk. ...`
+- `substation` sections
+- `circuit breaker house` sections
+- short standalone print codes like `201-52,70`, which are treated as incomplete files
 
-- Parses raw text files
-- Extracts key fields (station, line, track, zone, limits, etc.)
-- Cleans and standardizes formatting
-- Outputs an analysis-ready CSV
+`group_zone.py`
 
+- Reads the initial processed division CSVs
+- Resolves the zone, print code(s), and line/train text for each stop
+- Expands multi-zone records into one row per zone
+- Produces a grouped station-level file at `data_extracted/grouped_processed/Passenger Station Power Limits.csv`
+- Logs zone parsing failures to `data_extracted/grouped_processed/group_zone_unable_to_process.csv`
 
-## Features
+`per_track.py`
 
-- Text parsing with regex
-- Data cleaning + normalization
-- Track-level data mapping
-- Validation checks
+- Reads the same initial processed division CSVs
+- Reuses the zone parsing logic from `group_zone.py`
+- Produces one row per track or incomplete entry
+- Carries substation and CBH names alongside each track row
+- Falls back to a zone-only row when a file has no track rows
+- Writes `data_extracted/grouped_processed/Passenger Station Power Limits V.2.csv`
+- Logs failures to `data_extracted/grouped_processed/per_track_unable_to_process.csv`
 
+## Expected Layout
 
-## Example Input (Raw .txt)
-Note: Sample data is synthetic and does not reflect real MTA data.
+The scripts expect the raw source folders at the repo root:
 
-Zone - 33     201 - 118     Fulton Line
-
+```text
+PASSENGER-POWER-LIMITS/
+├── BMT/
+├── IND/
+├── IRT/
+├── parse_into_csv.py
+├── group_zone.py
+└── per_track.py
 ```
+
+Generated files are written under:
+
+```text
+data_extracted/
+├── intial_processed/
+└── grouped_processed/
+```
+
+Note: the directory name is intentionally spelled `intial_processed` because that name is already used throughout the code and output paths.
+
+## Run Order
+
+Run the scripts in this order:
+
+```bash
+python3 parse_into_csv.py
+python3 group_zone.py
+python3 per_track.py
+```
+
+## Parsing Notes
+
+The parser is intentionally conservative because the source files contain real formatting exceptions.
+
+- Track descriptions may span multiple lines; the parser keeps reading until it sees the expected blank-line boundary.
+- Zone descriptions may use either `-` or `=` between the print prefix and the number list.
+- Some files contain only an incomplete print code with no usable zone line; those records are preserved instead of being dropped.
+- Duplicate folders are skipped when the path contains `dup`.
+
+## Function Notes
+
+The code is organized around a small number of parsing helpers with very specific responsibilities:
+
+- `parse_section_items(...)` reads substation and CBH sections while tolerating extra blank lines inside a section.
+- `get_full_track_line(...)` continues reading until a multiline track description is complete.
+- `parse_name_desc(...)` handles the different ways zone and track identifiers appear in the raw text.
+- `handle_zone(...)` is the shared zone-resolution function used by both grouped outputs, including incomplete-file handling.
+- `get_track_rows(...)` in `per_track.py` preserves the fallback behavior for files that contain zone information but no track rows.
+
+## Example
+
+Raw text:
+
+```text
 Zone - 33     201 - 118     Fulton Line
 
 TK.A1 - Atlantic Ave s/s gap - Elton s/s gap
 TK.A2 - Elton s/s gap - Atlantic Ave s/s gap
-TK.A3 - Atlantic Ave s/s gap - Elton s/s gap
-TK.A4 - Elton s/s gap - Atlantic Ave s/s gap
 ```
 
-## Example Input (Raw .txt)
+Track-level output shape:
 
 ```csv
-Division,Station,Line,Track,Zone,Limits,Substation,Verified,Complete
-IND,Atlantic Ave,Fulton Line,TK.A1,33,"Atlantic Ave to Elton gap",EP,TRUE,TRUE
-IND,Atlantic Ave,Fulton Line,TK.A2,33,"Elton gap to Atlantic Ave",EP,TRUE,TRUE
-IND,Atlantic Ave,Fulton Line,TK.A3,33,"Atlantic Ave to Elton gap",EP,TRUE,TRUE
-IND,Atlantic Ave,Fulton Line,TK.A4,33,"Elton gap to Atlantic Ave",EP,TRUE,TRUE
+Division,Stop Name,Print,Line & Trains,Track Name,Limits,Zone,CBH,Substation,Is File Complete
+IND,Atlantic Ave,201-118,FULTON LINE,TK. A1,ATLANTIC AVE S/S GAP - ELTON S/S GAP,ZONE 33,,,TRUE
+IND,Atlantic Ave,201-118,FULTON LINE,TK. A2,ELTON S/S GAP - ATLANTIC AVE S/S GAP,ZONE 33,,,TRUE
 ```
+

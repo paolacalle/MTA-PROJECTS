@@ -1,207 +1,240 @@
 import csv
 import os
-import sys
-import pandas as pd
 import re
+
+import pandas as pd
 from pandas.api.types import is_string_dtype
+
 IN_DIR = "data_extracted/intial_processed"
 OUT_DIR = "data_extracted/grouped_processed"
+DIVISIONS = ("BMT", "IRT", "IND")
+UNABLE_HEADERS = ["division", "stop_name", "zone_name", "zone_desc", "reason"]
 
-# print codes
 RE_PRINTCODE = re.compile(r"(\d{3})\s*-\s*(\d{1,3}(?:\s*,\s*\d{1,3})*)\s+(.*)")
 RE_EPRINTCODE = re.compile(r"(\d{3})\s*=\s*(\d{1,3}(?:\s*,\s*\d{1,3})*)\s+(.*)")
 RE_PRINTCODEONLY = re.compile(r"(\d{3})\s*-\s*(\d{1,3}(?:\s*,\s*\d{1,3})*)")
 
-unable_to_process = []
 
-out_df = {
-    "Division": [],
-    "Stop Name": [],
-    "Zone": [],
-    "Line & Trains": [],
-    "Print": [],
-    "Limits": [],
-    "Type": [],
-    "Type Identifier" : []
-}
+def empty_grouped_output():
+    """
+    Return the column layout for the station-level grouped output file.
+    """
+    return {
+        "Division": [],
+        "Stop Name": [],
+        "Zone": [],
+        "Line & Trains": [],
+        "Print": [],
+        "Limits": [],
+        "Type": [],
+        "Type Identifier": [],
+    }
 
-def handle_zone(stop_name, stop_name_group):
+
+def parse_zone_description(zone_desc):
     """
-    Extract zone info and parse the print code + line from the zone description.
-    Returns:
-        (zone_name, print_code, line) or None
+    Extract print code(s) and line text from a zone description.
+
+    The raw files contain multiple valid separator formats, so the function
+    tries the supported regex patterns in priority order.
     """
-    
+    for pattern in (RE_PRINTCODE, RE_EPRINTCODE, RE_PRINTCODEONLY):
+        match = pattern.match(zone_desc)
+        if not match:
+            continue
+
+        groups = match.groups()
+        if len(groups) == 3:
+            prefix, nums, line = groups
+        else:
+            prefix, nums = groups
+            line = None
+
+        num_list = [num.strip() for num in nums.split(",")]
+        print_codes = ",".join(f"{prefix}-{num}" for num in num_list)
+        return print_codes, line
+
+    return None, None
+
+
+def normalize_zone_names(zone_name):
+    """
+    Expand a raw zone identifier string into normalized zone labels.
+
+    Some files store multiple zones in one field or omit the literal `zone`
+    prefix on part of the value, so this helper normalizes those cases before
+    rows are emitted downstream.
+    """
+    normalized_zones = []
+    for zone in zone_name.split(","):
+        cleaned = zone.strip()
+        if "zone" in cleaned:
+            normalized_zones.append(cleaned)
+        else:
+            normalized_zones.append("zone " + cleaned.replace(".", ""))
+    return normalized_zones
+
+
+def handle_zone(stop_name, stop_name_group, unable_to_process=None):
+    """
+    Resolve the zone metadata for a stop and yield normalized tuples.
+
+    Output tuples are:
+    `(zone_name, print_codes, line_name)`
+
+    This helper is shared by both output scripts so the special handling for
+    missing zones and incomplete files stays consistent.
+    """
+    if unable_to_process is None:
+        unable_to_process = []
+
     zone_rows = stop_name_group[stop_name_group["category"] == "zone"]
+    division = (
+        stop_name_group["division"].iloc[0]
+        if "division" in stop_name_group.columns and not stop_name_group.empty
+        else None
+    )
 
     if zone_rows.empty:
-        division = (
-            stop_name_group["division"].iloc[0]
-            if "division" in stop_name_group.columns and not stop_name_group.empty
-            else None
-        )
-
-        # fill in incomplete case
         incomplete = stop_name_group[stop_name_group["category"] == "incomplete"]
         if not incomplete.empty:
-            r1 = incomplete.iloc[0]
-            print_code = str(r1["name"]).strip()
+            print_code = str(incomplete.iloc[0]["name"]).strip()
             yield None, print_code, None
-        else:
-            unable_to_process.append({
+            return
+
+        unable_to_process.append(
+            {
                 "division": division,
                 "stop_name": stop_name,
                 "zone_name": None,
                 "zone_desc": None,
-                "reason": "no_zone_found"
-            })
+                "reason": "no_zone_found",
+            }
+        )
+        return
 
-        return None
-    
-    # take first zone row
     zone_row = zone_rows.iloc[0]
     zone_name = str(zone_row["name"]).strip().replace("-", "")
     zone_desc = str(zone_row["description"]).strip()
-    division = zone_row["division"] if "division" in zone_row.index else None
 
-    # parse the zone_desc
-    m = RE_PRINTCODE.match(zone_desc)
-    
-    if not m:
-        m = RE_EPRINTCODE.match(zone_desc)
+    print_codes, line = parse_zone_description(zone_desc)
+    if print_codes is None:
+        unable_to_process.append(
+            {
+                "division": division,
+                "stop_name": stop_name,
+                "zone_name": zone_name,
+                "zone_desc": zone_desc,
+                "reason": "regex_failed",
+            }
+        )
+        return
 
-    if not m:
-        m = RE_PRINTCODEONLY.match(zone_desc)
+    for zone in normalize_zone_names(zone_name):
+        yield zone, print_codes, line
 
-    if m:
-        g = m.groups()
 
-        if len(g) == 3:
-            prefix, nums, line = m.groups()
-        else:
-            prefix, nums = m.groups()
-            line = None
-
-        # normalize numbers like "52,70" -> "201-52,201-70"
-        num_list = [n.strip() for n in nums.split(",")]
-        print_codes = ",".join([f"{prefix}-{n}" for n in num_list])
-    else:
-        unable_to_process.append({
-            "division": division,
-            "stop_name": stop_name,
-            "zone_name": zone_name,
-            "zone_desc": zone_desc,
-            "reason": "regex_failed"
-        })
-            
-
-    # handle multple zone in one
-    zones = zone_name.split(",")
-
-    # category name
-    for z in zones:
-        if "zone" in z:
-            yield z, print_codes, line 
-        else:
-            yield "zone " + z.replace(".", ""), print_codes, line
-    
-
-    return None
-
-def write_unable_to_process(output_dir, file_name="group_zone_unable_to_process.csv"):
+def write_unable_to_process(unable_to_process, output_dir, file_name="group_zone_unable_to_process.csv"):
     """
-    Write all rows that could not be processed to CSV.
+    Write zone-resolution failures for later review.
     """
     if not unable_to_process:
         return
+
     out_path = os.path.join(output_dir, file_name)
     file_exists = os.path.exists(out_path)
-    fieldnames = ["division", "stop_name", "zone_name", "zone_desc", "reason"]
-    with open(out_path, "a", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=fieldnames)
+
+    with open(out_path, "a", newline="", encoding="utf-8") as out_file:
+        writer = csv.DictWriter(out_file, fieldnames=UNABLE_HEADERS)
         if not file_exists:
             writer.writeheader()
         writer.writerows(unable_to_process)
 
-def write_grouped_output(out_df, division, output_dir):
+
+def clean_desc(value):
     """
-    Write processed grouped output to a division CSV.
+    Remove a leading dash from limit descriptions after normalization.
+    """
+    if pd.isna(value):
+        return value
+    return re.sub(r"^\s*-\s*", "", str(value))
+
+
+def clean_track(value):
+    """
+    Convert normalized `TRACK` labels back to the preferred `TK.` output form.
+    """
+    if pd.isna(value):
+        return value
+    return str(value).replace("TRACK ", "TK. ")
+
+
+def write_grouped_output(out_df, output_name, output_dir):
+    """
+    Materialize one grouped output CSV after uppercase and display cleanup.
     """
     if not out_df["Division"]:
         return
-    
-    for col in out_df.keys():
-        print(col, len(out_df[col]))
-    
-    out_path = os.path.join(output_dir, f"{division}.csv")
+
+    out_path = os.path.join(output_dir, f"{output_name}.csv")
     df_out = pd.DataFrame(out_df)
+    df_out = df_out.apply(lambda series: series.str.upper() if is_string_dtype(series) else series)
 
+    if "Limits" in df_out.columns:
+        df_out["Limits"] = df_out["Limits"].apply(clean_desc)
 
-    df_out = df_out.apply(
-        lambda s: s.str.upper() if is_string_dtype(s) else s
-    )
-
-
-    def clean_desc(line):
-        if pd.isna(line):
-            return line
-        return re.sub(r'^\s*-\s*', '', str(line))
-    
-    df_out["Limits"] = df_out["Limits"].apply(clean_desc)
-
-    def clean_track(line):
-        if pd.isna(line):
-            return line
-        return line.replace("TRACK ", "TK. ")
-    
     if "Track Name" in df_out.columns:
         df_out["Track Name"] = df_out["Track Name"].apply(clean_track)
 
     df_out.to_csv(out_path, index=False)
 
-def iterate_stop_name(division):
+
+def iterate_stop_name(division, out_df, unable_to_process):
+    """
+    Build the station-level grouped output for one division CSV.
+    """
     d_csv_path = os.path.join(IN_DIR, f"{division}.csv")
     df = pd.read_csv(d_csv_path)
 
     for stop_name, stop_name_group in df.groupby("stop_name"):
         try:
-            for res in handle_zone(stop_name, stop_name_group):
-                if not res:
-                    continue
-
-                zone, print_codes, line = res
-
-                non_zone_rows = stop_name_group[stop_name_group["category"] !=  "zone"]
+            for zone, print_codes, line in handle_zone(stop_name, stop_name_group, unable_to_process):
+                non_zone_rows = stop_name_group[stop_name_group["category"] != "zone"]
                 size = non_zone_rows.shape[0]
-                out_df["Division"].extend([i for i in non_zone_rows['division']])
+
+                out_df["Division"].extend(non_zone_rows["division"].tolist())
                 out_df["Stop Name"].extend([stop_name] * size)
                 out_df["Zone"].extend([zone] * size)
                 out_df["Line & Trains"].extend([line] * size)
                 out_df["Print"].extend([print_codes] * size)
-                out_df["Limits"].extend([i for i in  non_zone_rows["description"]])
-                out_df["Type"].extend([i for i in  non_zone_rows["category"]])
-                out_df["Type Identifier"].extend([i for i in non_zone_rows["name"]])
+                out_df["Limits"].extend(non_zone_rows["description"].tolist())
+                out_df["Type"].extend(non_zone_rows["category"].tolist())
+                out_df["Type Identifier"].extend(non_zone_rows["name"].tolist())
+        except Exception as exc:
+            unable_to_process.append(
+                {
+                    "division": division,
+                    "stop_name": stop_name,
+                    "zone_name": None,
+                    "zone_desc": None,
+                    "reason": f"exception: {exc}",
+                }
+            )
 
-
-        except Exception as e:
-            unable_to_process.append({
-                "division": division,
-                "stop_name": stop_name,
-                "zone_name": None,
-                "zone_desc": None,
-                "reason": f"exception: {str(e)}"
-            })
-    
 
 if __name__ == "__main__":
-    runs = ["BMT", "IRT", "IND"]
     os.makedirs(OUT_DIR, exist_ok=True)
-    # optional: remove old failure log so each run is fresh
-    unable_path = os.path.join(OUT_DIR, "unable_to_process.csv")
+
+    output_rows = empty_grouped_output()
+    unable_to_process = []
+
+    unable_path = os.path.join(OUT_DIR, "group_zone_unable_to_process.csv")
     if os.path.exists(unable_path):
         os.remove(unable_path)
-    for division in runs:
+
+    for division in DIVISIONS:
         print(f"Processing {division}...")
-        iterate_stop_name(division)
-    write_grouped_output(out_df, "Passenger Station Power Limits", OUT_DIR)
-    write_unable_to_process(OUT_DIR)
+        iterate_stop_name(division, output_rows, unable_to_process)
+
+    write_grouped_output(output_rows, "Passenger Station Power Limits", OUT_DIR)
+    write_unable_to_process(unable_to_process, OUT_DIR)
