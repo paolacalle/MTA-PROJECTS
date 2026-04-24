@@ -1,29 +1,9 @@
 """Fill missing MASTERGO fields and normalize selected text columns."""
 
-def get_headers(ws):
-    """Return a lowercase header-to-column-index mapping for the worksheet."""
-    return {
-        str(cell.value).strip().lower(): idx + 1
-        for idx, cell in enumerate(ws[1])
-        if cell.value
-    }
-
-def ensure_cols(ws, headers, cols):
-    """Ensure the required columns exist and return their indexes."""
-    col_map = {}
-    for col in cols:
-        key = col.lower()
-        if key in headers:
-            col_map[col] = headers[key]
-        else:
-            idx = ws.max_column + 1
-            ws.cell(row=1, column=idx, value=col)
-            headers[key] = idx
-            col_map[col] = idx
-    return headers, col_map
+from worksheet_utils import ensure_cols, get_headers
 
 
-def fill_TRONAME(ws, row, col_map):
+def fill_tro_name(ws, row, col_map):
     """Populate an empty TRO name with the current default placeholder."""
     col = col_map["TRO Name (REQUIRED)"]
     fill_value = ""
@@ -144,7 +124,7 @@ def process(ws):
     headers, col_map = ensure_cols(ws, headers, required_cols)
 
     for row in range(2, ws.max_row + 1):
-        fill_TRONAME(ws, row, col_map)
+        fill_tro_name(ws, row, col_map)
         fill_days_empty(ws, row, col_map)
         fill_record_created_on(ws, row, col_map)
         fill_duration_printed_as(ws, row, col_map)

@@ -1,9 +1,9 @@
 """Expand combined MASTERGO line values into standardized line columns."""
 
 import json
-import re
 import pandas as pd
-from openpyxl import load_workbook
+
+from worksheet_utils import ensure_cols, get_headers
 
 INPUT_MERGEDNAME = r'..\mappers\MASTERGO\MAPPED\lines_to_sodos_lines.json'
 INPUT_MAP1 = r'..\mappers\lines_master_map1.csv'
@@ -45,30 +45,6 @@ def load_json(path):
     """Load a UTF-8 JSON mapping file from disk."""
     with open(path, "r", encoding="utf-8") as f:
         return json.load(f)
-
-
-def get_headers(ws):
-    """Return a lowercase header-to-column-index mapping."""
-    return {
-        str(cell.value).strip().lower(): idx + 1
-        for idx, cell in enumerate(ws[1])
-        if cell.value
-    }
-
-
-def ensure_cols(ws, headers, cols):
-    """Ensure the output line columns exist and return their indexes."""
-    col_map = {}
-    for col in cols:
-        key = col.lower()
-        if key in headers:
-            col_map[col] = headers[key]
-        else:
-            idx = ws.max_column + 1
-            ws.cell(row=1, column=idx, value=col)
-            headers[key] = idx
-            col_map[col] = idx
-    return headers, col_map
 
 
 # ----------------------------

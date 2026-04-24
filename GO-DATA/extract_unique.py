@@ -1,0 +1,53 @@
+"""Export one workbook per column containing that column's unique values."""
+
+import os
+import re
+import sys
+
+import pandas as pd
+
+
+def make_safe_filename(name, max_len=50):
+    """Convert a column name into a filesystem-safe filename."""
+    name = re.sub(r'[\\/*?:"<>|#()]', "_", str(name))
+    name = re.sub(r"_+", "_", name)
+    return name[:max_len].strip("_")
+
+
+def extract_unique_per_column(input_path, output_dir):
+    """Write each column's unique non-null values to a separate Excel file."""
+    df = pd.read_excel(input_path)
+    os.makedirs(output_dir, exist_ok=True)
+
+    for col in df.columns:
+        try:
+            unique_values = df[col].dropna().unique()
+            unique_df = pd.DataFrame(unique_values, columns=[col])
+
+            safe_col_name = make_safe_filename(col)
+            output_file = os.path.join(output_dir, f"{safe_col_name}.xlsx")
+
+            unique_df.to_excel(output_file, index=False)
+            print(f"Saved: {output_file}")
+        except Exception as exc:
+            print(f"Failed for column '{col}': {exc}")
+
+
+def main():
+    """Run the CLI wrapper for exporting unique values per column."""
+    if len(sys.argv) < 2:
+        print("Usage: python script.py <input_excel_path> [output_directory]")
+        sys.exit(1)
+
+    input_path = sys.argv[1]
+    if len(sys.argv) >= 3:
+        output_dir = sys.argv[2]
+    else:
+        base = os.path.splitext(os.path.basename(input_path))[0]
+        output_dir = f"{base}_unique_columns"
+
+    extract_unique_per_column(input_path, output_dir)
+
+
+if __name__ == "__main__":
+    main()

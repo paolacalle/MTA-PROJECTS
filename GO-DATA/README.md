@@ -52,8 +52,6 @@ At a high level, the MASTERGO pipeline does the following:
 
 NOTE: Data is not real MTA data.
 
-Add the sample data here once provided. Recommended format:
-
 ### Input Sample
 
 ```text
